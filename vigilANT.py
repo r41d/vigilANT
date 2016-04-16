@@ -54,35 +54,56 @@ class Ant(Dot):
 	def __init__(self, x, y, colo=BLACK):
 		super(Ant, self).__init__(x, y, colo)
 		self.life = 10
-	def update(self):
+	def update(self, player, sugar, water):
 		pass
 		# Ant AI ...
+		# find nearest sugar... and walk to it... while avoiding water
 
 class PlayerAnt(Ant):
 	def __init__(self, x, y):
 		super(PlayerAnt, self).__init__(x, y, RED)
-	def update(self):
+		self.STEP = 5
+	def update(self, events):
 		pass
+		# handle player input...
+		if K_UP in events: self.rect.y -= self.STEP
+		if K_LEFT in events: self.rect.x -= self.STEP
+		if K_DOWN in events: self.rect.y += self.STEP
+		if K_RIGHT in events: self.rect.x += self.STEP
+		if self.rect.x <   10: self.rect.x = 10
+		if self.rect.y <   10: self.rect.y = 10
+		if self.rect.x > X-20: self.rect.x = X-20
+		if self.rect.y > Y-20: self.rect.y = Y-20
 
 class Water(Dot):
 	def __init__(self, x, y):
-		super(Ant, self).__init__(self, x, y, WATERBLUE)
-		self.timeout = 255
+		super(Water, self).__init__(x, y, col=WATERBLUE)
+		self.fade = 0
 	def update(self):
-		self.timeout -= 10
-		self.color = self.timeout
-		self.image.fill(self.color) # turns from blue to white
-		if self.timeout < 0:
+		self.fade += 5
+		if self.fade >= 200:
 			self.kill()
-		SUGAR.add(Sugar(self.rect.x, self.rect.y))
+			SUGAR.add(Sugar(self.rect.x, self.rect.y))
+		else:
+			self.image.fill((self.fade,self.fade,200)) # turns from blue to white
 
 class Sugar(Dot):
 	def __init__(self, x, y):
-		super(Sugar, self).__init__(self, x, y, WHITE)
+		super(Sugar, self).__init__(x, y, WHITE)
+
+def rain(player, water):
+	if randint(1,1000) < 25:
+		xx = PLAYER.rect.x
+		while abs(PLAYER.rect.x-xx) < 30:
+			xx = randint(10,X-10)
+		yy = PLAYER.rect.y
+		while abs(PLAYER.rect.y-yy) < 30:
+			yy = randint(10,Y-10)
+		water.add(Water(xx,yy))
 
 
-
-PLAYER = pygame.sprite.Group(PlayerAnt(X/2, Y/2))
+PLAYER = PlayerAnt(X/2, Y/2)
+PLAYERGROUP = pygame.sprite.Group(PLAYER)
 ANTS = pygame.sprite.Group()
 WATER = pygame.sprite.Group()
 SUGAR = pygame.sprite.Group()
@@ -118,15 +139,20 @@ while run:
 	#pos = label.get_rect(left=16, top=0)
 	#DISPLAY.blit(label, pos)
 
-	PLAYER.update()
-	ANTS.update()
+	PLAYERGROUP.update(events)
+	ANTS.update(PLAYER, SUGAR, WATER)
 	WATER.update()
 	SUGAR.update()
 
-	PLAYER.draw(DISPLAY)
+	rain(PLAYER, WATER)
+	#ants(ANTS)
+
 	ANTS.draw(DISPLAY)
-	WATER.draw(DISPLAY)
 	SUGAR.draw(DISPLAY)
+	WATER.draw(DISPLAY)
+	PLAYERGROUP.draw(DISPLAY)
+
+	print WATER
 
 	TIMER.tick(FPS)
 	pygame.display.update()
