@@ -1,0 +1,17 @@
+Background: Green (grass)
+Player ant: red
+Other ants: black
+sugar: white
+water: blue
+Rocket: brown
+
+Goal: collect sugar
+      avoid water
+      bring sugar to rocket (sugar is fuel)
+      rocket is desperate to leave, so it's modd drops over time
+
+sugar drops randomly
+water also does (raindrops) (but not in a certain radius around the player)
+
+# evil Nerdy Princess (peach) fires Desperate Rockets (booom!) toward the player ant
+
