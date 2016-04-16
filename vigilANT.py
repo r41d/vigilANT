@@ -6,6 +6,7 @@ from pygame.locals import K_w, K_a, K_s, K_d, K_UP, K_LEFT, K_DOWN, K_RIGHT, K_S
 from random import randint, randrange
 import os.path as path
 from glob import glob
+import math
 
 X = 800
 Y = 600
@@ -18,6 +19,9 @@ FONT = pygame.font.Font("pixel.ttf", 20)
 
 KEYS = K_w, K_a, K_s, K_d, K_UP, K_LEFT, K_DOWN, K_RIGHT, K_SPACE, K_RETURN, K_ESCAPE
 SQUARE = 10
+WATERSQR = SQUARE
+SUGARSQR = SQUARE - 2
+ANTSQR = SQUARE
 TIMER = pygame.time.Clock()
 tick = 0
 
@@ -62,7 +66,8 @@ class Ant(Dot):
 class PlayerAnt(Ant):
 	def __init__(self, x, y):
 		super(PlayerAnt, self).__init__(x, y, RED)
-		self.STEP = 5
+		self.STEP = 2
+		self.sugar = 0
 	def update(self, events):
 		pass
 		# handle player input...
@@ -77,28 +82,31 @@ class PlayerAnt(Ant):
 
 class Water(Dot):
 	def __init__(self, x, y):
-		super(Water, self).__init__(x, y, col=WATERBLUE)
+		super(Water, self).__init__(x, y, col=WATERBLUE, sqr=10)
 		self.fade = 0
 	def update(self):
 		self.fade += 5
-		if self.fade >= 200:
+		if self.fade >= 255:
 			self.kill()
-			SUGAR.add(Sugar(self.rect.x, self.rect.y))
+			off = (WATERSQR - SUGARSQR) / 2
+			SUGAR.add(Sugar(self.rect.x+off, self.rect.y+off))
 		else:
+			#if self.fade >= 200:
+			#	self.image.fill((self.fade,self.fade,self.fade))
+			#else:
 			self.image.fill((self.fade,self.fade,200)) # turns from blue to white
 
 class Sugar(Dot):
 	def __init__(self, x, y):
-		super(Sugar, self).__init__(x, y, WHITE)
+		super(Sugar, self).__init__(x, y, col=WHITE, sqr=8)
 
 def rain(player, water):
-	if randint(1,1000) < 25:
+	if randint(1,100) < 8:
 		xx = PLAYER.rect.x
-		while abs(PLAYER.rect.x-xx) < 30:
-			xx = randint(10,X-10)
 		yy = PLAYER.rect.y
-		while abs(PLAYER.rect.y-yy) < 30:
-			yy = randint(10,Y-10)
+		while dist(PLAYER.rect, ((xx,yy))) < 50:
+			xx = randint(10,X-20)
+			yy = randint(10,Y-20)
 		water.add(Water(xx,yy))
 
 
@@ -113,6 +121,7 @@ SUGAR = pygame.sprite.Group()
 #getsurface = lambda s: SPRITES[s]
 #getwav = lambda s: SOUNDS[s] if s in SOUNDS else pygame.mixer.Sound(str(s)+'.wav')
 #playsound = lambda s: getwav(s).play()
+dist = lambda r1, (r2x,r2y): math.sqrt( (r1.x-r2x)**2 + (r1.y-r2y)**2 )
 
 run = True
 events = []
@@ -139,20 +148,26 @@ while run:
 	#pos = label.get_rect(left=16, top=0)
 	#DISPLAY.blit(label, pos)
 
+	### UPDATE
 	PLAYERGROUP.update(events)
 	ANTS.update(PLAYER, SUGAR, WATER)
 	WATER.update()
 	SUGAR.update()
 
+	### TICK
 	rain(PLAYER, WATER)
-	#ants(ANTS)
+	#rain(PLAYER, WATER)
+	#ants(ANTS) # maybe spawn some ants
+	collected = len(pygame.sprite.groupcollide(SUGAR, PLAYERGROUP, True, False))
+	PLAYER.sugar += collected
 
+	print PLAYER.sugar
+
+	### DRAW
 	ANTS.draw(DISPLAY)
 	SUGAR.draw(DISPLAY)
 	WATER.draw(DISPLAY)
 	PLAYERGROUP.draw(DISPLAY)
-
-	print WATER
 
 	TIMER.tick(FPS)
 	pygame.display.update()
