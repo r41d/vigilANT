@@ -22,6 +22,7 @@ SQUARE = 10
 WATERSQR = SQUARE
 SUGARSQR = SQUARE - 2
 ANTSQR = SQUARE
+SUGAR2COLLECT = 1
 TIMER = pygame.time.Clock()
 tick = 0
 
@@ -29,16 +30,23 @@ BLACK = (0,0,0)
 GREY = (128,128,128)
 WHITE = (255,255,255)
 RED = (200,0,0)
-GRASSGREEN = (0,200,0)
-WATERBLUE = (0,0,200)
+GRASSGREEN = (0,180,0)
+WATERBLUE = (0,0,180)
 
 pygame.display.set_caption('gANgsTer')
 DISPLAY = pygame.display.set_mode((X, Y))
 
-#SPRITES = { path.basename(path.splitext(s)[0]) : pygame.image.load(s).convert_alpha()
-#            for s in glob("*.png") }
+SPRITES = { path.basename(path.splitext(s)[0]) : pygame.image.load(s).convert_alpha()
+            for s in glob("*.png") }
 #SOUNDS = { path.basename(path.splitext(s)[0]) : pygame.mixer.Sound(str(s))
 #            for s in glob("*.wav") }
+
+# helper functions
+getsurface = lambda s: SPRITES[s]
+getwav = lambda s: SOUNDS[s] if s in SOUNDS else pygame.mixer.Sound(str(s)+'.wav')
+playsound = lambda s: getwav(s).play()
+dist = lambda r1, (r2x,r2y): math.sqrt( (r1.x-r2x)**2 + (r1.y-r2y)**2 )
+
 
 class Dot(pygame.sprite.Sprite):
 	def __init__(self, x, y, col=GREY, sqr=SQUARE):
@@ -80,6 +88,51 @@ class PlayerAnt(Ant):
 		if self.rect.x > X-20: self.rect.x = X-20
 		if self.rect.y > Y-20: self.rect.y = Y-20
 
+class Rocket(pygame.sprite.Sprite):
+	def __init__(self):
+		super(Rocket, self).__init__()
+		self.image = getsurface('rocket-desperate')
+		self.rect = self.image.get_rect()
+		self.rect.center = (80, Y/4*3)
+		self.fire = RocketFire(self.rect.centerx+1, self.rect.bottom-5)
+		self.TAKEOFF = False
+		self.FIRESPAWNED = False
+	def update(self, player):
+		if not self.TAKEOFF and player.sugar >= SUGAR2COLLECT:
+			self.TAKEOFF = True
+		elif not self.FIRESPAWNED and self.TAKEOFF:
+			ROCKETGROUP.add(self.fire, layer=-1)
+			self.TAKEOFF = False
+			self.FIRESPAWNED = True
+		elif self.FIRESPAWNED:
+			self.rect.y -= 5
+			self.fire.rect.y -= 5
+
+class MultiSprite(pygame.sprite.Sprite):
+	def __init__(self, path, rx, ry):
+		super(MultiSprite, self).__init__()
+		self.sprite = getsurface(path)
+		self.rx, self.ry = rx, ry
+
+	def draw2surface(self, target, x, y, pX=0, pY=0):
+		subsprite_rect = (self.rx*x, self.ry*y, self.rx, self.ry)
+		topleft = (pX, pY)
+		target.blit(self.sprite, topleft, subsprite_rect)
+
+class RocketFire(MultiSprite):
+	def __init__(self, offX, offY):
+		super(RocketFire, self).__init__("rocketflame", 88, 132)
+		self.frame = 0
+		self.image = pygame.Surface((self.rx, self.ry)).convert_alpha()
+		self.rect = self.image.get_rect()
+		self.rect.center = (offX,offY)
+		self.update(None)
+
+	def update(self, _player):
+		self.frame = (self.frame + 1) % 8
+		self.image.fill((0,0,0,0))
+		self.draw2surface(self.image, self.frame, 0)
+
 class Water(Dot):
 	def __init__(self, x, y):
 		super(Water, self).__init__(x, y, col=WATERBLUE, sqr=10)
@@ -104,7 +157,7 @@ def rain(player, water):
 	if randint(1,100) < 8:
 		xx = PLAYER.rect.x
 		yy = PLAYER.rect.y
-		while dist(PLAYER.rect, ((xx,yy))) < 50:
+		while dist(PLAYER.rect, ((xx,yy))) < 50 or dist(ROCKET.rect, ((xx,yy))) < 20:
 			xx = randint(10,X-20)
 			yy = randint(10,Y-20)
 		water.add(Water(xx,yy))
@@ -115,13 +168,9 @@ PLAYERGROUP = pygame.sprite.Group(PLAYER)
 ANTS = pygame.sprite.Group()
 WATER = pygame.sprite.Group()
 SUGAR = pygame.sprite.Group()
+ROCKET = Rocket()
+ROCKETGROUP = pygame.sprite.LayeredUpdates(ROCKET)
 
-
-# helper functions
-#getsurface = lambda s: SPRITES[s]
-#getwav = lambda s: SOUNDS[s] if s in SOUNDS else pygame.mixer.Sound(str(s)+'.wav')
-#playsound = lambda s: getwav(s).play()
-dist = lambda r1, (r2x,r2y): math.sqrt( (r1.x-r2x)**2 + (r1.y-r2y)**2 )
 
 run = True
 events = []
@@ -153,6 +202,7 @@ while run:
 	ANTS.update(PLAYER, SUGAR, WATER)
 	WATER.update()
 	SUGAR.update()
+	ROCKETGROUP.update(PLAYER)
 
 	### TICK
 	rain(PLAYER, WATER)
@@ -168,6 +218,7 @@ while run:
 	SUGAR.draw(DISPLAY)
 	WATER.draw(DISPLAY)
 	PLAYERGROUP.draw(DISPLAY)
+	ROCKETGROUP.draw(DISPLAY)
 
 	TIMER.tick(FPS)
 	pygame.display.update()
