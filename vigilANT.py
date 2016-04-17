@@ -16,6 +16,7 @@ pygame.init()
 pygame.mixer.init()
 
 FONT = pygame.font.Font("pixel.ttf", 20)
+BIGFONT = pygame.font.Font("pixel.ttf", 100)
 
 KEYS = K_w, K_a, K_s, K_d, K_UP, K_LEFT, K_DOWN, K_RIGHT, K_SPACE, K_RETURN, K_ESCAPE
 SQUARE = 10
@@ -23,6 +24,7 @@ WATERSQR = SQUARE
 SUGARSQR = SQUARE - 2
 ANTSQR = SQUARE
 SUGAR2COLLECT = 1
+PLAYERSPEED = 4
 TIMER = pygame.time.Clock()
 tick = 0
 
@@ -38,15 +40,18 @@ DISPLAY = pygame.display.set_mode((X, Y))
 
 SPRITES = { path.basename(path.splitext(s)[0]) : pygame.image.load(s).convert_alpha()
             for s in glob("*.png") }
-#SOUNDS = { path.basename(path.splitext(s)[0]) : pygame.mixer.Sound(str(s))
-#            for s in glob("*.wav") }
+SOUNDS = { path.basename(path.splitext(s)[0]) : pygame.mixer.Sound(str(s))
+            for s in glob("*.ogg") }
 
 # helper functions
 getsurface = lambda s: SPRITES[s]
 getwav = lambda s: SOUNDS[s] if s in SOUNDS else pygame.mixer.Sound(str(s)+'.wav')
 playsound = lambda s: getwav(s).play()
 dist = lambda r1, (r2x,r2y): math.sqrt( (r1.x-r2x)**2 + (r1.y-r2y)**2 )
-
+def draw_text(text, font, color, pos):
+	label = font.render(text, 1, color)
+	posi = label.get_rect(center = pos)
+	DISPLAY.blit(label, posi)
 
 class Dot(pygame.sprite.Sprite):
 	def __init__(self, x, y, col=GREY, sqr=SQUARE):
@@ -65,7 +70,7 @@ class Dot(pygame.sprite.Sprite):
 class Ant(Dot):
 	def __init__(self, x, y, colo=BLACK):
 		super(Ant, self).__init__(x, y, colo)
-		self.life = 10
+		self.life = 5
 	def update(self, player, sugar, water):
 		pass
 		# Ant AI ...
@@ -74,19 +79,34 @@ class Ant(Dot):
 class PlayerAnt(Ant):
 	def __init__(self, x, y):
 		super(PlayerAnt, self).__init__(x, y, RED)
-		self.STEP = 2
+		self.STEP = PLAYERSPEED
 		self.sugar = 0
+		self.LOSER = False
 	def update(self, events):
-		pass
-		# handle player input...
-		if K_UP in events: self.rect.y -= self.STEP
-		if K_LEFT in events: self.rect.x -= self.STEP
-		if K_DOWN in events: self.rect.y += self.STEP
-		if K_RIGHT in events: self.rect.x += self.STEP
-		if self.rect.x <   10: self.rect.x = 10
-		if self.rect.y <   10: self.rect.y = 10
-		if self.rect.x > X-20: self.rect.x = X-20
-		if self.rect.y > Y-20: self.rect.y = Y-20
+		if not self.LOSER and self.life > 0:
+			# movement
+			newrect = self.rect.copy()
+			if   K_UP    in events: newrect.move_ip((0,-self.STEP))
+			elif K_DOWN  in events: newrect.move_ip((0,self.STEP))
+			if   K_LEFT  in events: newrect.move_ip((-self.STEP,0))
+			elif K_RIGHT in events: newrect.move_ip((self.STEP,0))
+			if not newrect.colliderect(ROCKET.rect):
+				self.rect = newrect
+			# boundaries
+			if self.rect.x < 10:
+				self.rect.x = 10
+			if self.rect.y < 10:
+				self.rect.y = 10
+			if self.rect.x > X-20:
+				self.rect.x = X-20
+			if self.rect.y > Y-20:
+				self.rect.y = Y-20
+			# rocket
+			if self.rect.x < ROCKET.rect.right and self.rect.y < ROCKET.rect.top:
+				pass
+		if not self.LOSER and self.life <= 0:
+			self.LOSER = True
+			playsound("loser")
 
 class Rocket(pygame.sprite.Sprite):
 	def __init__(self):
@@ -101,12 +121,14 @@ class Rocket(pygame.sprite.Sprite):
 		if not self.TAKEOFF and player.sugar >= SUGAR2COLLECT:
 			self.TAKEOFF = True
 		elif not self.FIRESPAWNED and self.TAKEOFF:
+			self.image = getsurface('rocket-happy')
 			ROCKETGROUP.add(self.fire, layer=-1)
+			playsound('rocketlaunch')
 			self.TAKEOFF = False
 			self.FIRESPAWNED = True
 		elif self.FIRESPAWNED:
-			self.rect.y -= 5
-			self.fire.rect.y -= 5
+			self.rect.y -= 10
+			self.fire.rect.y -= 10
 
 class MultiSprite(pygame.sprite.Sprite):
 	def __init__(self, path, rx, ry):
@@ -141,8 +163,9 @@ class Water(Dot):
 		self.fade += 5
 		if self.fade >= 255:
 			self.kill()
-			off = (WATERSQR - SUGARSQR) / 2
-			SUGAR.add(Sugar(self.rect.x+off, self.rect.y+off))
+			if randint(1,100) <= 10: # only add sugar with chance of 10 %
+				off = (WATERSQR - SUGARSQR) / 2
+				SUGAR.add(Sugar(self.rect.x+off, self.rect.y+off))
 		else:
 			#if self.fade >= 200:
 			#	self.image.fill((self.fade,self.fade,self.fade))
@@ -154,10 +177,10 @@ class Sugar(Dot):
 		super(Sugar, self).__init__(x, y, col=WHITE, sqr=8)
 
 def rain(player, water):
-	if randint(1,100) < 8:
+	if randint(1,100) < 20:
 		xx = PLAYER.rect.x
 		yy = PLAYER.rect.y
-		while dist(PLAYER.rect, ((xx,yy))) < 50 or dist(ROCKET.rect, ((xx,yy))) < 20:
+		while dist(PLAYER.rect, ((xx,yy))) < 50 or dist(ROCKET.rect, ((xx,yy))) < 10:
 			xx = randint(10,X-20)
 			yy = randint(10,Y-20)
 		water.add(Water(xx,yy))
@@ -193,10 +216,6 @@ while run:
 		elif e.key in events:
 			events.remove(e.key)
 
-	#label = FONT.render(str(slapcnt), 1, (255, 0, 0))
-	#pos = label.get_rect(left=16, top=0)
-	#DISPLAY.blit(label, pos)
-
 	### UPDATE
 	PLAYERGROUP.update(events)
 	ANTS.update(PLAYER, SUGAR, WATER)
@@ -205,13 +224,12 @@ while run:
 	ROCKETGROUP.update(PLAYER)
 
 	### TICK
-	rain(PLAYER, WATER)
-	#rain(PLAYER, WATER)
+	if not PLAYER.LOSER:
+		for _ in range(randint(1,5)):
+			rain(PLAYER, WATER)
 	#ants(ANTS) # maybe spawn some ants
-	collected = len(pygame.sprite.groupcollide(SUGAR, PLAYERGROUP, True, False))
-	PLAYER.sugar += collected
-
-	print PLAYER.sugar
+	PLAYER.life -= len(pygame.sprite.groupcollide(WATER, PLAYERGROUP, True, False))
+	PLAYER.sugar += len(pygame.sprite.groupcollide(SUGAR, PLAYERGROUP, True, False))
 
 	### DRAW
 	ANTS.draw(DISPLAY)
@@ -219,6 +237,10 @@ while run:
 	WATER.draw(DISPLAY)
 	PLAYERGROUP.draw(DISPLAY)
 	ROCKETGROUP.draw(DISPLAY)
+	draw_text("Lives: "+str(PLAYER.life), FONT, (255,0,0), (60, 15))
+	draw_text("Sugar: "+str(PLAYER.sugar), FONT, (255,0,0), (60, 30))
+	if PLAYER.LOSER:
+		draw_text("LOSER", BIGFONT, (255,0,0), (X/2, Y/2))
 
 	TIMER.tick(FPS)
 	pygame.display.update()
