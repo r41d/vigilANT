@@ -23,8 +23,13 @@ SQUARE = 10
 WATERSQR = SQUARE
 SUGARSQR = SQUARE - 2
 ANTSQR = SQUARE
-SUGAR2COLLECT = 1
+SUGAR2COLLECT = 10
+SUGAREXPIRATION = 5 # sec
+SPAWNLIFE = 5
 PLAYERSPEED = 4
+ROCKETSPEED = 6
+MAXDROPNUMBER = 10
+DROPPROBABILTY = 20 # %
 TIMER = pygame.time.Clock()
 tick = 0
 
@@ -32,7 +37,7 @@ BLACK = (0,0,0)
 GREY = (128,128,128)
 WHITE = (255,255,255)
 RED = (200,0,0)
-GRASSGREEN = (0,180,0)
+GRASSGREEN = (0,150,0)
 WATERBLUE = (0,0,180)
 
 pygame.display.set_caption('gANgsTer')
@@ -70,7 +75,7 @@ class Dot(pygame.sprite.Sprite):
 class Ant(Dot):
 	def __init__(self, x, y, colo=BLACK):
 		super(Ant, self).__init__(x, y, colo)
-		self.life = 5
+		self.life = SPAWNLIFE
 	def update(self, player, sugar, water):
 		pass
 		# Ant AI ...
@@ -81,18 +86,20 @@ class PlayerAnt(Ant):
 		super(PlayerAnt, self).__init__(x, y, RED)
 		self.STEP = PLAYERSPEED
 		self.sugar = 0
+		self.WIN = False
 		self.LOSER = False
 	def update(self, events):
-		if not self.LOSER and self.life > 0:
+		if not (self.WIN or self.LOSER) and self.life > 0:
 			# movement
 			newrect = self.rect.copy()
 			if   K_UP    in events: newrect.move_ip((0,-self.STEP))
 			elif K_DOWN  in events: newrect.move_ip((0,self.STEP))
 			if   K_LEFT  in events: newrect.move_ip((-self.STEP,0))
 			elif K_RIGHT in events: newrect.move_ip((self.STEP,0))
+			# don't collide with rocket
 			if not newrect.colliderect(ROCKET.rect):
 				self.rect = newrect
-			# boundaries
+			# outer boundaries
 			if self.rect.x < 10:
 				self.rect.x = 10
 			if self.rect.y < 10:
@@ -101,9 +108,6 @@ class PlayerAnt(Ant):
 				self.rect.x = X-20
 			if self.rect.y > Y-20:
 				self.rect.y = Y-20
-			# rocket
-			if self.rect.x < ROCKET.rect.right and self.rect.y < ROCKET.rect.top:
-				pass
 		if not self.LOSER and self.life <= 0:
 			self.LOSER = True
 			playsound("loser")
@@ -127,8 +131,11 @@ class Rocket(pygame.sprite.Sprite):
 			self.TAKEOFF = False
 			self.FIRESPAWNED = True
 		elif self.FIRESPAWNED:
-			self.rect.y -= 10
-			self.fire.rect.y -= 10
+			self.rect.y -= ROCKETSPEED
+			self.fire.rect.y -= ROCKETSPEED
+			if not PLAYER.WIN and self.rect.bottom < -50: # rocket left screen
+				PLAYER.WIN = True
+				playsound('tada')
 
 class MultiSprite(pygame.sprite.Sprite):
 	def __init__(self, path, rx, ry):
@@ -175,12 +182,18 @@ class Water(Dot):
 class Sugar(Dot):
 	def __init__(self, x, y):
 		super(Sugar, self).__init__(x, y, col=WHITE, sqr=8)
+		self.expiration = FPS*SUGAREXPIRATION
+	def update(self):
+		self.expiration -= 1
+		if self.expiration < 0:
+			self.kill()
 
 def rain(player, water):
-	if randint(1,100) < 20:
+	if randint(1,100) < DROPPROBABILTY:
 		xx = PLAYER.rect.x
 		yy = PLAYER.rect.y
-		while dist(PLAYER.rect, ((xx,yy))) < 50 or dist(ROCKET.rect, ((xx,yy))) < 10:
+		# don't spawn too near to player or where the rocket is
+		while dist(PLAYER.rect, ((xx,yy))) < 20 or ROCKET.rect.collidepoint(xx,yy):
 			xx = randint(10,X-20)
 			yy = randint(10,Y-20)
 		water.add(Water(xx,yy))
@@ -225,7 +238,7 @@ while run:
 
 	### TICK
 	if not PLAYER.LOSER:
-		for _ in range(randint(1,5)):
+		for _ in range(randint(1,MAXDROPNUMBER)):
 			rain(PLAYER, WATER)
 	#ants(ANTS) # maybe spawn some ants
 	PLAYER.life -= len(pygame.sprite.groupcollide(WATER, PLAYERGROUP, True, False))
@@ -239,9 +252,12 @@ while run:
 	ROCKETGROUP.draw(DISPLAY)
 	draw_text("Lives: "+str(PLAYER.life), FONT, (255,0,0), (60, 15))
 	draw_text("Sugar: "+str(PLAYER.sugar), FONT, (255,0,0), (60, 30))
+	if PLAYER.WIN:
+		draw_text("WIN", BIGFONT, (255,0,0), (X/2, Y/2))
 	if PLAYER.LOSER:
 		draw_text("LOSER", BIGFONT, (255,0,0), (X/2, Y/2))
 
+	### TICK
 	TIMER.tick(FPS)
 	pygame.display.update()
 	tick = (tick % (FPS*100)) + 1 # avoid overflow
