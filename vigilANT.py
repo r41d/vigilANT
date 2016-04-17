@@ -89,7 +89,7 @@ class PlayerAnt(Ant):
 		self.WIN = False
 		self.LOSER = False
 	def update(self, events):
-		if not (self.WIN or self.LOSER) and self.life > 0:
+		if not (ROCKET.FIRESPAWNED or self.LOSER) and self.life > 0:
 			# movement
 			newrect = self.rect.copy()
 			if   K_UP    in events: newrect.move_ip((0,-self.STEP))
@@ -237,7 +237,7 @@ while run:
 	ROCKETGROUP.update(PLAYER)
 
 	### TICK
-	if not PLAYER.LOSER:
+	if not (PLAYER.WIN or PLAYER.LOSER):
 		for _ in range(randint(1,MAXDROPNUMBER)):
 			rain(PLAYER, WATER)
 	#ants(ANTS) # maybe spawn some ants
